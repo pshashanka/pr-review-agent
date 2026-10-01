@@ -69,6 +69,7 @@ export async function createFixtureRepo(): Promise<FixtureRepo> {
       cwd: root,
       encoding: "utf8",
       env: {
+        NODE_ENV: "test", // required by Next's ProcessEnv typing (web tests share this fixture)
         PATH: process.env["PATH"] ?? "",
         GIT_CONFIG_NOSYSTEM: "1",
         GIT_CONFIG_GLOBAL: "/dev/null",

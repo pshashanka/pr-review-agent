@@ -15,7 +15,7 @@ export {
   type ReviewInput,
 } from "./graph/state.js";
 export { AnthropicLlm, DEFAULT_MODEL, type Effort } from "./llm/anthropic.js";
-export type { Llm, LlmProgress } from "./llm/llm.js";
+export type { Llm, LlmProgress, StructuredRequest, StructuredResult } from "./llm/llm.js";
 export { RepoTools, type RepoToolsConnection } from "./mcp/repo-tools.js";
 export { FilePublisher } from "./publish/file.js";
 export { GitHubPublisher, parsePullRequestRef } from "./publish/github.js";
