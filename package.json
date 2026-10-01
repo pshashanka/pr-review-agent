@@ -12,7 +12,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "eval": "pnpm --filter @pr-review/agent eval",
+    "dev": "pnpm --filter @pr-review/agent build && pnpm --filter @pr-review/web dev"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
