@@ -97,9 +97,13 @@ function reviewScript(overrides: Partial<ConstructorParameters<typeof ScriptedLl
   });
 }
 
-function setup(llm: ScriptedLlm, toolsApi: RepoToolsApi = tools) {
+function setup(
+  llm: ScriptedLlm,
+  toolsApi: RepoToolsApi = tools,
+  options: ReviewDeps["options"] = DEFAULT_OPTIONS,
+) {
   const publisher = new MemoryPublisher();
-  const deps: ReviewDeps = { tools: toolsApi, llm, publisher, options: DEFAULT_OPTIONS };
+  const deps: ReviewDeps = { tools: toolsApi, llm, publisher, options };
   const checkpointer = SqliteSaver.fromConnString(":memory:");
   const graph = compileReviewGraph(deps, checkpointer);
   let thread = 0;
@@ -150,6 +154,8 @@ describe("review graph", () => {
       { path: "pnpm-lock.yaml", reason: "lockfile" },
     ]);
     expect(llm.callsFor("analyzeFile")).toHaveLength(4);
+    // Deferred node: must fire exactly once, not once per fanned-in branch.
+    expect(llm.callsFor("synthesize")).toHaveLength(1);
 
     // Findings: unknown and duplicate ids dropped; diff-line finding inline, other not.
     expect(review?.findings.map((f) => [f.path, f.line, f.inline])).toEqual([
@@ -171,6 +177,33 @@ describe("review graph", () => {
 
     expect(request?.markdown).toContain("## Review: Comment");
     expect(events).toContainEqual({ type: "file_done", path: "src/math.js", findings: 2 });
+  });
+
+  it("still reviews when no file needs a model call", async () => {
+    const llm = reviewScript();
+    const { graph, config } = setup(llm, tools, { ...DEFAULT_OPTIONS, maxFiles: 0 });
+    const cfg = config();
+
+    const { state, request } = await runToApproval(graph, cfg);
+
+    expect(state.next).toEqual(["humanApproval"]);
+    expect(request).toBeDefined();
+    const review = request?.review;
+
+    expect(review?.meta.filesReviewed).toEqual([]);
+    expect(review?.meta.filesSkipped.map((s) => s.path).sort()).toEqual(
+      [
+        ".github/workflows/ci.yml",
+        "assets/logo.png",
+        "package.json",
+        "pnpm-lock.yaml",
+        "src/math.js",
+        "src/strings.js",
+      ].sort(),
+    );
+
+    expect(llm.callsFor("analyzeFile")).toHaveLength(0);
+    expect(llm.callsFor("synthesize")).toHaveLength(1);
   });
 
   it("gives every call the same shared context, so the prefix caches", async () => {

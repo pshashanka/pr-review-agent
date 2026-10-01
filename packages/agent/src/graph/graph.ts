@@ -33,8 +33,14 @@ export const TRANSIENT_RETRY: RetryPolicy = {
  * loadChange → planReview → { summarizeDiff, analyzeFile × N, checkCoverage, flagRisks }
  *   → synthesize → validateReview → humanApproval → postReview | END
  *
- * The four middle branches run in parallel in one superstep; synthesize runs
- * once all of them have finished.
+ * The four middle branches run in parallel; `analyzeFile` only runs via the
+ * `Send`s from `fanOut`, so when the plan has zero files to analyze it never
+ * runs at all. `synthesize` is marked `defer: true` so LangGraph schedules it
+ * once every branch that *did* run has finished, rather than waiting on a
+ * fixed set of named sources (which would never be satisfied when
+ * `analyzeFile` is absent). That makes it safe to fan in from each branch
+ * with its own edge: synthesize still runs exactly once per turn, including
+ * when there are no files to analyze.
  */
 export function buildReviewGraph(deps: ReviewDeps) {
   return new StateGraph(ReviewState)
@@ -44,7 +50,7 @@ export function buildReviewGraph(deps: ReviewDeps) {
     .addNode("analyzeFile", analyzeFile(deps), { retryPolicy: TRANSIENT_RETRY })
     .addNode("checkCoverage", checkCoverage(deps), { retryPolicy: TRANSIENT_RETRY })
     .addNode("flagRisks", flagRisks(deps), { retryPolicy: TRANSIENT_RETRY })
-    .addNode("synthesize", synthesize(deps), { retryPolicy: TRANSIENT_RETRY })
+    .addNode("synthesize", synthesize(deps), { retryPolicy: TRANSIENT_RETRY, defer: true })
     .addNode("validateReview", validateReview(deps))
     .addNode("humanApproval", humanApproval())
     .addNode("postReview", postReview(deps), { retryPolicy: TRANSIENT_RETRY })
@@ -56,7 +62,10 @@ export function buildReviewGraph(deps: ReviewDeps) {
       "checkCoverage",
       "flagRisks",
     ])
-    .addEdge(["analyzeFile", "summarizeDiff", "checkCoverage", "flagRisks"], "synthesize")
+    .addEdge("analyzeFile", "synthesize")
+    .addEdge("summarizeDiff", "synthesize")
+    .addEdge("checkCoverage", "synthesize")
+    .addEdge("flagRisks", "synthesize")
     .addEdge("synthesize", "validateReview")
     .addEdge("validateReview", "humanApproval")
     .addConditionalEdges("humanApproval", (state: State) =>
