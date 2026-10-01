@@ -41,11 +41,11 @@ afterAll(async () => {
   await repo.cleanup();
 });
 
-const post = (body: unknown) =>
-  new Request("http://test/api", {
+const post = (body: unknown, headers: Record<string, string> = {}) =>
+  new Request("http://localhost/api", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
@@ -67,7 +67,7 @@ describe("review API", () => {
     threadId = ((await started.json()) as { threadId: string }).threadId;
     expect(threadId).toBe(`calc|base:main@${repo.headSha}`);
 
-    const response = await routes.events.GET(new Request("http://test"), ctx(threadId));
+    const response = await routes.events.GET(new Request("http://localhost"), ctx(threadId));
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     const events = await readEvents(response);
 
@@ -91,7 +91,7 @@ describe("review API", () => {
     const again = await routes.start.POST(post({ repo: "calc", base: "main" }));
 
     expect(((await again.json()) as { threadId: string }).threadId).toBe(threadId);
-    const status = await routes.status.GET(new Request("http://test"), ctx(threadId));
+    const status = await routes.status.GET(new Request("http://localhost"), ctx(threadId));
     expect(await status.json()).toMatchObject({
       status: { state: "awaiting_approval" },
       live: false,
@@ -109,7 +109,7 @@ describe("review API", () => {
     expect(approved.status).toBe(202);
 
     const events = await readEvents(
-      await routes.events.GET(new Request("http://test"), ctx(threadId)),
+      await routes.events.GET(new Request("http://localhost"), ctx(threadId)),
     );
     expect(events.at(-1)).toMatchObject({ type: "finished", status: { state: "published" } });
     expect(await readdir(join(dataDir, "calc"))).toEqual([
@@ -128,8 +128,111 @@ describe("review API", () => {
   });
 
   it("rejects malformed thread ids", async () => {
-    const response = await routes.status.GET(new Request("http://test"), ctx("nonsense"));
+    const response = await routes.status.GET(new Request("http://localhost"), ctx("nonsense"));
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe("request guards", () => {
+  let threadId: string;
+
+  beforeAll(async () => {
+    // A distinct pull request ref gives this a fresh thread id, separate from
+    // the one the "review API" tests above already published.
+    const started = await routes.start.POST(
+      post({
+        repo: "calc",
+        base: "main",
+        pullRequest: { owner: "acme", repo: "guard-check", number: 1 },
+      }),
+    );
+    threadId = ((await started.json()) as { threadId: string }).threadId;
+    // Drain the SSE stream so the run reaches its approval pause before the
+    // tests below touch this thread.
+    await readEvents(await routes.events.GET(new Request("http://localhost"), ctx(threadId)));
+  });
+
+  it("refuses a start with a non-JSON content type", async () => {
+    const request = new Request("http://localhost/api", {
+      method: "POST",
+      body: JSON.stringify({ repo: "calc", base: "main" }),
+      headers: { "content-type": "text/plain" },
+    });
+
+    const response = await routes.start.POST(request);
+
+    expect(response.status).toBe(415);
+    const status = await routes.status.GET(new Request("http://localhost"), ctx(threadId));
+    expect(await status.json()).toMatchObject({ status: { state: "awaiting_approval" } });
+  });
+
+  it("refuses a decision from a cross-origin Origin header", async () => {
+    const response = await routes.decision.POST(
+      post({ action: "approve" }, { origin: "https://evil.example" }),
+      ctx(threadId),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses a decision with the literal Origin: null", async () => {
+    const response = await routes.decision.POST(
+      post({ action: "approve" }, { origin: "null" }),
+      ctx(threadId),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses a decision with a malformed Origin header", async () => {
+    const response = await routes.decision.POST(
+      post({ action: "approve" }, { origin: "not a url" }),
+      ctx(threadId),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses a request with Sec-Fetch-Site: cross-site", async () => {
+    const response = await routes.decision.POST(
+      post({ action: "approve" }, { "sec-fetch-site": "cross-site" }),
+      ctx(threadId),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses a GET with an unrecognised Host header", async () => {
+    const response = await routes.status.GET(
+      new Request("http://localhost", { headers: { host: "evil.example" } }),
+      ctx(threadId),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects a start with an invalid pull request ref", async () => {
+    const response = await routes.start.POST(
+      post({ repo: "calc", base: "main", pullRequest: { owner: "..", repo: "..", number: 1 } }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("accepts a configured extra host", async () => {
+    const previous = process.env["PR_REVIEW_ALLOWED_HOSTS"];
+    process.env["PR_REVIEW_ALLOWED_HOSTS"] = "review.lan";
+    try {
+      const response = await routes.status.GET(
+        new Request("http://localhost", { headers: { host: "review.lan:3000" } }),
+        ctx(threadId),
+      );
+
+      expect(response.status).not.toBe(403);
+    } finally {
+      if (previous === undefined) delete process.env["PR_REVIEW_ALLOWED_HOSTS"];
+      else process.env["PR_REVIEW_ALLOWED_HOSTS"] = previous;
+    }
   });
 });

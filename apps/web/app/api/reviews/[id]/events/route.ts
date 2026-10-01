@@ -1,4 +1,4 @@
-import { errorResponse } from "@/lib/http";
+import { errorResponse, guardRequest } from "@/lib/http";
 import { loadThread } from "@/lib/reviews";
 import { getRegistry, type WebEvent } from "@/lib/run-registry";
 
@@ -16,6 +16,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  const guard = guardRequest(request, { mutating: false });
+  if (guard !== null) return guard;
   let id: string;
   let status;
   try {

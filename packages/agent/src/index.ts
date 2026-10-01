@@ -18,6 +18,6 @@ export { AnthropicLlm, DEFAULT_MODEL, type Effort } from "./llm/anthropic.js";
 export type { Llm, LlmProgress, StructuredRequest, StructuredResult } from "./llm/llm.js";
 export { RepoTools, type RepoToolsConnection } from "./mcp/repo-tools.js";
 export { FilePublisher } from "./publish/file.js";
-export { GitHubPublisher, parsePullRequestRef } from "./publish/github.js";
+export { GitHubPublisher, parsePullRequestRef, PullRequestRefSchema } from "./publish/github.js";
 export { renderInlineComment, renderReviewBody } from "./review/render-markdown.js";
 export type { Finding, Review, Risk, Coverage, Usage } from "./review/schema.js";

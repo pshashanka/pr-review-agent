@@ -177,6 +177,19 @@ describe("GitHubPublisher", () => {
       }),
     ).rejects.toThrow(/needs a pull request/);
   });
+
+  it("encodes owner and repo in the request path, as defence in depth", async () => {
+    const github = fakeGitHub();
+    await new GitHubPublisher({ token: "t", fetch: github.fetch }).publish(review, {
+      ...pr,
+      pullRequest: { owner: "weird owner/x", repo: "weird repo?y", number: 7 },
+    });
+
+    const post = github.requests.find((r) => r.method === "POST");
+    expect(post?.url).toBe(
+      "https://api.github.com/repos/weird%20owner%2Fx/weird%20repo%3Fy/pulls/7/reviews",
+    );
+  });
 });
 
 describe("parsePullRequestRef", () => {

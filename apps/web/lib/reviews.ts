@@ -6,14 +6,20 @@ import { ConflictError } from "./http";
 import { getRegistry } from "./run-registry";
 import { parseWebThreadId, webThreadId } from "./thread-id";
 
+// Mirrors @pr-review/agent's PullRequestRefSchema (packages/agent/src/publish/github.ts).
+// Duplicated instead of imported so this schema stays static: the agent is only
+// ever loaded at runtime via agentModule(), see apps/web/lib/agent-module.ts.
 export const StartReviewSchema = z.object({
   repo: z.string().min(1),
   base: z.string().min(1).max(256),
   head: z.string().min(1).max(256).default("HEAD"),
   pullRequest: z
     .object({
-      owner: z.string().min(1),
-      repo: z.string().min(1),
+      owner: z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/),
+      repo: z
+        .string()
+        .regex(/^[A-Za-z0-9._-]{1,100}$/)
+        .refine((repo) => repo !== "." && repo !== "..", "Repo name can't be . or .."),
       number: z.number().int().positive(),
     })
     .nullable()

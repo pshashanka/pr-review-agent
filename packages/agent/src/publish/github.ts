@@ -1,7 +1,18 @@
+import { z } from "zod";
 import type { Publisher } from "../graph/deps.js";
 import type { Published, PullRequestRef, ReviewInput } from "../graph/state.js";
 import { renderInlineComment, renderReviewBody, reviewMarker } from "../review/render-markdown.js";
 import type { Review, Verdict } from "../review/schema.js";
+
+/** A pull request ref (`owner/repo#123`), validated against GitHub's own naming rules. */
+export const PullRequestRefSchema = z.object({
+  owner: z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/),
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]{1,100}$/)
+    .refine((repo) => repo !== "." && repo !== "..", "Repo name can't be . or .."),
+  number: z.number().int().positive(),
+});
 
 export interface GitHubPublisherOptions {
   token: string;
@@ -42,7 +53,11 @@ export class GitHubPublisher implements Publisher {
   async publish(review: Review, input: ReviewInput): Promise<Published> {
     const pr = input.pullRequest;
     if (pr === null) throw new Error("GitHubPublisher needs a pull request to post to.");
-    const reviewsUrl = `${this.#apiUrl}/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/reviews`;
+    // encodeURIComponent is defence in depth: callers should validate with
+    // PullRequestRefSchema before this point.
+    const owner = encodeURIComponent(pr.owner);
+    const repo = encodeURIComponent(pr.repo);
+    const reviewsUrl = `${this.#apiUrl}/repos/${owner}/${repo}/pulls/${pr.number}/reviews`;
 
     const existing = await this.#findExisting(reviewsUrl, reviewMarker(review.meta.head));
     if (existing !== null) return { kind: "github", location: existing, alreadyPosted: true };
@@ -103,8 +118,16 @@ export class GitHubPublisher implements Publisher {
 /** Parses `owner/repo#123`. */
 export function parsePullRequestRef(text: string): PullRequestRef {
   const match = /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(text);
-  if (match?.[1] === undefined || match[2] === undefined || match[3] === undefined) {
+  const parsed =
+    match?.[1] === undefined || match[2] === undefined || match[3] === undefined
+      ? null
+      : PullRequestRefSchema.safeParse({
+          owner: match[1],
+          repo: match[2],
+          number: Number(match[3]),
+        });
+  if (parsed === null || !parsed.success) {
     throw new Error(`Expected a pull request like owner/repo#123, got ${JSON.stringify(text)}`);
   }
-  return { owner: match[1], repo: match[2], number: Number(match[3]) };
+  return parsed.data;
 }

@@ -17,10 +17,17 @@ describe("loadConfig", () => {
     expect(config.demo).toBe(true);
     expect(config.githubToken).toBeNull();
     expect(config.dataDir).toBe(".pr-review");
+    expect(config.allowedHosts).toEqual([]);
   });
 
   it("rejects repo names that could be confused with paths", () => {
     expect(() => loadConfig({ PR_REVIEW_REPOS: "../x=/tmp" })).toThrow(/Invalid repo name/);
+  });
+
+  it("parses the allowed hosts list", () => {
+    const config = loadConfig({ PR_REVIEW_ALLOWED_HOSTS: "Review.Example.com, review.lan ," });
+
+    expect(config.allowedHosts).toEqual(["review.example.com", "review.lan"]);
   });
 });
 

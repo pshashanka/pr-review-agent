@@ -62,12 +62,15 @@ Pick a repo, start a review, and watch the steps, per-file progress and the mode
 
 **No API key?** Set `PR_REVIEW_DEMO=1` to use a clearly labelled offline stand-in. It flags leftover TODOs and `console.log`s, which is enough to exercise the whole flow.
 
-| Variable          | Meaning                                                             |
-| ----------------- | ------------------------------------------------------------------- |
-| `PR_REVIEW_REPOS` | Allowlist of `name=path` pairs. The browser only ever sends a name. |
-| `PR_REVIEW_DATA`  | Checkpoints and file-published reviews (default `.pr-review`)       |
-| `PR_REVIEW_DEMO`  | `1` for the offline demo model                                      |
-| `GITHUB_TOKEN`    | Needed to post reviews to pull requests                             |
+| Variable                  | Meaning                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `PR_REVIEW_REPOS`         | Allowlist of `name=path` pairs. The browser only ever sends a name.               |
+| `PR_REVIEW_DATA`          | Checkpoints and file-published reviews (default `.pr-review`)                     |
+| `PR_REVIEW_DEMO`          | `1` for the offline demo model                                                    |
+| `GITHUB_TOKEN`            | Needed to post reviews to pull requests                                           |
+| `PR_REVIEW_ALLOWED_HOSTS` | Extra `Host` header values the API accepts, besides `localhost` (comma-separated) |
+
+The API refuses requests with a cross-site `Origin`/`Sec-Fetch-Site`, or with a `Host` header that isn't `localhost` or in `PR_REVIEW_ALLOWED_HOSTS`, to block CSRF and DNS rebinding.
 
 ## Design decisions
 
