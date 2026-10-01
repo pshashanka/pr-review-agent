@@ -1,5 +1,5 @@
 import picomatch from "picomatch";
-import type { ChangedFile, Diff } from "../mcp/repo-tools.js";
+import type { ChangedFile } from "../mcp/repo-tools.js";
 import type { Risk } from "./schema.js";
 
 const LOCKFILES = picomatch(
@@ -145,8 +145,11 @@ const RISK_RULES: {
 const LARGE_FILE_DELETIONS = 300;
 const LARGE_TOTAL_DELETIONS = 1000;
 
-/** Risks that can be spotted from paths and line counts alone, without a model. */
-export function ruleRisks(files: readonly ChangedFile[], diff: Diff | null): Risk[] {
+/**
+ * Risks that can be spotted from paths and line counts alone, without a model.
+ * `hiddenPaths` are changed files whose contents the repo policy withheld.
+ */
+export function ruleRisks(files: readonly ChangedFile[], hiddenPaths: readonly string[]): Risk[] {
   const risks: Risk[] = [];
   for (const rule of RISK_RULES) {
     const paths = files.filter((f) => rule.match(f.path)).map((f) => f.path);
@@ -161,9 +164,8 @@ export function ruleRisks(files: readonly ChangedFile[], diff: Diff | null): Ris
     }
   }
 
-  const hidden = (diff?.files ?? []).filter((f) => f.patchOmitted === "denied").map((f) => f.path);
   const secrets = risks.find((r) => r.kind === "secrets");
-  const unflaggedHidden = hidden.filter((p) => !secrets?.paths.includes(p));
+  const unflaggedHidden = hiddenPaths.filter((p) => !secrets?.paths.includes(p));
   if (unflaggedHidden.length > 0) {
     risks.push({
       kind: "secrets",

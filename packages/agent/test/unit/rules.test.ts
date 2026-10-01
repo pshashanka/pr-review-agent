@@ -67,7 +67,7 @@ describe("ruleRisks", () => {
         file("src/auth/session.ts"),
         file("src/math.ts"),
       ],
-      null,
+      [],
     );
 
     expect(risks.map((r) => [r.kind, r.level, r.paths])).toEqual([
@@ -81,21 +81,7 @@ describe("ruleRisks", () => {
   });
 
   it("flags files whose contents the repo policy hides", () => {
-    const risks = ruleRisks([file("config/prod.secret")], {
-      base: "a",
-      head: "b",
-      mergeBase: "a",
-      truncated: false,
-      files: [
-        {
-          path: "config/prod.secret",
-          oldPath: null,
-          status: "modified",
-          patch: "",
-          patchOmitted: "denied",
-        },
-      ],
-    });
+    const risks = ruleRisks([file("config/prod.secret")], ["config/prod.secret"]);
 
     expect(risks).toEqual([
       expect.objectContaining({ kind: "secrets", paths: ["config/prod.secret"] }),
@@ -103,7 +89,7 @@ describe("ruleRisks", () => {
   });
 
   it("flags large deletions", () => {
-    const risks = ruleRisks([file("src/legacy.ts", { status: "deleted", deletions: 50 })], null);
+    const risks = ruleRisks([file("src/legacy.ts", { status: "deleted", deletions: 50 })], []);
 
     expect(risks).toEqual([
       expect.objectContaining({ kind: "large_deletion", paths: ["src/legacy.ts"] }),
@@ -111,7 +97,7 @@ describe("ruleRisks", () => {
   });
 
   it("returns nothing for an ordinary change", () => {
-    expect(ruleRisks([file("src/math.ts")], null)).toEqual([]);
+    expect(ruleRisks([file("src/math.ts")], [])).toEqual([]);
   });
 });
 

@@ -1,7 +1,9 @@
 import { Annotation } from "@langchain/langgraph";
+import { z } from "zod";
 import type { ChangeSet, ChangedFile } from "../mcp/repo-tools.js";
 import type { SkippedFile, TestPairing } from "../review/rules.js";
 import {
+  VerdictSchema,
   ZERO_USAGE,
   addUsage,
   type Coverage,
@@ -39,8 +41,30 @@ export interface FileResult {
   findings: Finding[];
 }
 
-export type ReviewDecision =
-  { action: "approve" } | { action: "edit"; review: Review } | { action: "reject"; reason: string };
+/**
+ * What a human decides at the approval step. This arrives from outside (CLI,
+ * web UI), so it is validated. An edit can rewrite text and drop findings but
+ * can't add or move them, so every inline comment stays anchored to the diff.
+ */
+export const ReviewDecisionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("approve") }),
+  z.object({ action: z.literal("reject"), reason: z.string() }),
+  z.object({
+    action: z.literal("edit"),
+    summary: z.string(),
+    verdict: VerdictSchema,
+    findings: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        body: z.string(),
+        suggestion: z.string().nullable(),
+      }),
+    ),
+  }),
+]);
+
+export type ReviewDecision = z.infer<typeof ReviewDecisionSchema>;
 
 export interface Published {
   kind: "github" | "file";
