@@ -4,11 +4,11 @@ A LangGraph.js agent that reviews a pull request: it summarizes the change, anal
 
 It's part two of a three-part series on production AI engineering for code review:
 
-| Repo                                                             | Role                                                                                   |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`mcp-repo-tools`](https://github.com/pshashanka/mcp-repo-tools) | MCP server: the agent's only, read-only view of the repository                         |
-| **pr-review-agent** (this)                                       | The agent: orchestration, model calls, human approval, publishing                      |
-| `gameable-tests-bench`                                           | Next: tasks with deliberately weak tests, and a grader that catches agents gaming them |
+| Repo                                                                         | Role                                                                             |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`mcp-repo-tools`](https://github.com/pshashanka/mcp-repo-tools)             | MCP server: the agent's only, read-only view of the repository                   |
+| **pr-review-agent** (this)                                                   | The agent: orchestration, model calls, human approval, publishing                |
+| [`gameable-tests-bench`](https://github.com/pshashanka/gameable-tests-bench) | Tasks with deliberately weak tests, and a grader that catches agents gaming them |
 
 ## How it works
 
