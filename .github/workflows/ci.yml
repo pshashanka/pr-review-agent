@@ -22,8 +22,9 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The web app's types come from the agent's build output, so build first.
+      - run: pnpm build
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
