@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - apps/*
+minimumReleaseAgeExclude:
+  - "@anthropic-ai/sdk@0.131.0"
+
+# Packages allowed to run install scripts. mcp-repo-tools is a git dependency
+# that builds itself on install; pnpm pins approval to an exact revision, so
+# bumping it means updating this key. better-sqlite3 compiles a native addon.
+allowBuilds:
+  "mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66": true
+  better-sqlite3: true

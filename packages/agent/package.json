@@ -1,0 +1,40 @@
+{
+  "name": "@pr-review/agent",
+  "version": "0.1.0",
+  "description": "LangGraph.js agent that reviews a pull request through the mcp-repo-tools MCP server.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "pr-review": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/picomatch": "^4.0.3",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@langchain/core": "^1.2.13",
+    "@langchain/langgraph": "^1.4.18",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "mcp-repo-tools": "github:pshashanka/mcp-repo-tools",
+    "picomatch": "^4.0.7",
+    "zod": "^4.6.5"
+  }
+}
