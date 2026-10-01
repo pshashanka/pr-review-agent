@@ -121,16 +121,19 @@ export class AnthropicLlm implements Llm {
         throw new LlmOutputError(`Ran out of output tokens (${this.#maxTokens}).`);
       }
       if (message.stop_reason === "pause_turn") {
-        messages.push({ role: "assistant", content: message.content });
+        messages.push({ role: "assistant", content: afterFallback(message.content) });
         continue;
       }
 
-      const toolUses = message.content.filter(
+      const content = afterFallback(message.content);
+      const toolUses = content.filter(
         (block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use",
       );
       if (message.stop_reason === "tool_use" && toolUses.length > 0) {
-        // Echo the whole turn back unchanged, thinking blocks included.
-        messages.push({ role: "assistant", content: message.content });
+        // Echo the turn back, thinking blocks included, but only what survives
+        // the fallback boundary (see `afterFallback`); that also governs which
+        // tool calls we execute, so a declined model's tool calls never run.
+        messages.push({ role: "assistant", content });
         const results = await Promise.all(
           toolUses.map((use) => this.#runTool(use, tools, request.onProgress)),
         );
@@ -167,6 +170,30 @@ export class AnthropicLlm implements Llm {
       ...(result.isError ? { is_error: true } : {}),
     };
   }
+}
+
+/**
+ * Content to echo back for a turn that may have crossed a server-side fallback.
+ *
+ * With `fallbacks: "default"`, a declining model's hop can end partway through
+ * the response; the API then requires that, up to the last `fallback` block,
+ * only `text` blocks be echoed back — `thinking`, `redacted_thinking`,
+ * `tool_use` and any other model-internal block from the declining model's
+ * unfinished span can't be replayed to it. The `fallback` block itself is an
+ * ignored audit marker and is dropped. Content after the boundary, and `text`
+ * blocks before it, pass through unchanged. With no `fallback` block, the
+ * content is unchanged.
+ */
+export function afterFallback(
+  content: readonly Anthropic.Beta.BetaContentBlock[],
+): Anthropic.Beta.BetaContentBlock[] {
+  const lastFallbackIndex = content.findLastIndex((block) => block.type === "fallback");
+  if (lastFallbackIndex === -1) return content.slice();
+  const beforeBoundary = content
+    .slice(0, lastFallbackIndex)
+    .filter((block) => block.type === "text");
+  const afterBoundary = content.slice(lastFallbackIndex + 1);
+  return [...beforeBoundary, ...afterBoundary];
 }
 
 function toUsage(usage: Anthropic.Beta.BetaUsage): Usage {

@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { AnthropicLlm } from "../../src/llm/anthropic.js";
+import { AnthropicLlm, afterFallback } from "../../src/llm/anthropic.js";
 import {
   LlmOutputError,
   LlmRefusalError,
@@ -76,6 +76,71 @@ const echoTool = (name: string, calls: unknown[]): LlmTool => ({
     calls.push(input);
     return Promise.resolve({ text: `${name} ok`, isError: false });
   },
+});
+
+const fallbackBlock = (overrides: Record<string, unknown> = {}) => ({
+  type: "fallback",
+  from: { model: "claude-opus-5" },
+  to: { model: "claude-sonnet-5" },
+  trigger: "refusal",
+  ...overrides,
+});
+
+const asContent = (content: unknown[]) => content as unknown as Anthropic.Beta.BetaContentBlock[];
+
+describe("afterFallback", () => {
+  it("returns content unchanged when there is no fallback block", () => {
+    const content = asContent([
+      { type: "text", text: "hi" },
+      { type: "tool_use", id: "a", name: "x", input: {} },
+    ]);
+
+    expect(afterFallback(content)).toEqual(content);
+  });
+
+  it("drops non-text blocks before the boundary and keeps everything after it", () => {
+    const content = asContent([
+      { type: "thinking", thinking: "", signature: "sig" },
+      { type: "tool_use", id: "a", name: "x", input: {} },
+      fallbackBlock(),
+      { type: "text", text: "after" },
+      { type: "tool_use", id: "b", name: "y", input: {} },
+    ]);
+
+    expect(afterFallback(content)).toEqual([
+      { type: "text", text: "after" },
+      { type: "tool_use", id: "b", name: "y", input: {} },
+    ]);
+  });
+
+  it("keeps a text block before the boundary", () => {
+    const content = asContent([
+      { type: "text", text: "t1" },
+      { type: "thinking", thinking: "", signature: "sig1" },
+      { type: "tool_use", id: "a", name: "x", input: {} },
+      fallbackBlock(),
+      { type: "thinking", thinking: "", signature: "sig2" },
+      { type: "tool_use", id: "b", name: "y", input: {} },
+    ]);
+
+    expect(afterFallback(content)).toEqual([
+      { type: "text", text: "t1" },
+      { type: "thinking", thinking: "", signature: "sig2" },
+      { type: "tool_use", id: "b", name: "y", input: {} },
+    ]);
+  });
+
+  it("treats only the last of two fallback blocks as the boundary", () => {
+    const content = asContent([
+      { type: "tool_use", id: "a", name: "x", input: {} },
+      fallbackBlock(),
+      { type: "tool_use", id: "b", name: "y", input: {} },
+      fallbackBlock(),
+      { type: "tool_use", id: "c", name: "z", input: {} },
+    ]);
+
+    expect(afterFallback(content)).toEqual([{ type: "tool_use", id: "c", name: "z", input: {} }]);
+  });
 });
 
 describe("AnthropicLlm", () => {
@@ -153,6 +218,32 @@ describe("AnthropicLlm", () => {
         { type: "tool_result", tool_use_id: "t1", content: "read_file ok" },
         { type: "tool_result", tool_use_id: "t2", content: "search_code ok" },
       ],
+    });
+  });
+
+  it("never runs or echoes tool calls from before a mid-output fallback boundary", async () => {
+    const calls: unknown[] = [];
+    const toolA = { type: "tool_use", id: "tA", name: "read_file", input: { path: "a.ts" } };
+    const toolB = { type: "tool_use", id: "tB", name: "read_file", input: { path: "b.ts" } };
+    const { client, requests } = fakeClient([
+      { stop_reason: "tool_use", content: [toolA, fallbackBlock(), toolB] },
+      { parsed_output: { answer: "done" } },
+    ]);
+    const llm = new AnthropicLlm({ client });
+
+    const result = await llm.structured({
+      ...baseRequest,
+      tools: [echoTool("read_file", calls)],
+    });
+
+    expect(result.output).toEqual({ answer: "done" });
+    expect(calls).toEqual([{ path: "b.ts" }]);
+
+    const second = requests[1];
+    expect(second?.messages[1]).toEqual({ role: "assistant", content: [toolB] });
+    expect(second?.messages[2]).toEqual({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "tB", content: "read_file ok" }],
     });
   });
 
