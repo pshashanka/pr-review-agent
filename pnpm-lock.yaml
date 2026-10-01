@@ -181,7 +181,7 @@ importers:
         version: 1.31.0(@cfworker/json-schema@4.1.1)(zod@4.6.5)
       mcp-repo-tools:
         specifier: github:pshashanka/mcp-repo-tools
-        version: https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66(@cfworker/json-schema@4.1.1)
+        version: https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/d3ce4156228f09eebce29027f2471737c029ac75(@cfworker/json-schema@4.1.1)
       picomatch:
         specifier: ^4.0.7
         version: 4.0.7
@@ -1474,8 +1474,8 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
-  mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66:
-    resolution: {gitHosted: true, integrity: sha512-l/ilH6QUkUSGiFbuGGV6FW78ve0H6BucZXHMaVSP+G5uvsQlFjNN1QJpc+usv62daQfcgADkMvdhe4SRrlasoQ==, tarball: https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66}
+  mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/d3ce4156228f09eebce29027f2471737c029ac75:
+    resolution: {gitHosted: true, integrity: sha512-l8OkFQ7OgvANmYNYCarNYV/VUiYlw+AMAMNkX9hLB2ad/2NjxcrKvpNyzB8Lj9jzrsRbxa5Yc7rTuugBojWD0w==, tarball: https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/d3ce4156228f09eebce29027f2471737c029ac75}
     version: 0.1.0
     engines: {node: '>=22.12'}
     hasBin: true
@@ -3198,7 +3198,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66(@cfworker/json-schema@4.1.1):
+  mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/d3ce4156228f09eebce29027f2471737c029ac75(@cfworker/json-schema@4.1.1):
     dependencies:
       '@modelcontextprotocol/sdk': 1.31.0(@cfworker/json-schema@4.1.1)(zod@4.6.5)
       picomatch: 4.0.7

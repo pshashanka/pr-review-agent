@@ -8,5 +8,5 @@ minimumReleaseAgeExclude:
 # that builds itself on install; pnpm pins approval to an exact revision, so
 # bumping it means updating this key. better-sqlite3 compiles a native addon.
 allowBuilds:
-  "mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/c97c3eda5b83d5039f86a3690e2e83aa79068f66": true
+  "mcp-repo-tools@https://codeload.github.com/pshashanka/mcp-repo-tools/tar.gz/d3ce4156228f09eebce29027f2471737c029ac75": true
   better-sqlite3: true
