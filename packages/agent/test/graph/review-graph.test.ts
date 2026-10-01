@@ -317,6 +317,77 @@ describe("review graph", () => {
     expect(llm.callsFor("synthesize")[0]?.prompt).toContain("src/strings.js: NOT REVIEWED");
   });
 
+  it("degrades when flagRisks refuses, keeping the rule-based risks", async () => {
+    const llm = reviewScript({
+      flagRisks: () => {
+        throw new LlmRefusalError("other");
+      },
+    });
+    const { graph, config } = setup(llm);
+
+    const { request } = await runToApproval(graph, config());
+
+    expect(request?.review.risks.length).toBeGreaterThan(0);
+    expect(request?.review.risks.every((r) => r.source === "rule")).toBe(true);
+    expect(request?.review.meta.stepErrors).toEqual([
+      { step: "flagRisks", error: "LlmRefusalError: The model declined the request (other)." },
+    ]);
+    expect(request?.markdown).toContain("Not completed: risk analysis");
+  });
+
+  it("degrades when checkCoverage refuses, falling back to the name-based pairing", async () => {
+    const llm = reviewScript({
+      checkCoverage: () => {
+        throw new LlmRefusalError("other");
+      },
+    });
+    const { graph, config } = setup(llm);
+
+    const { request } = await runToApproval(graph, config());
+
+    expect(request?.review.coverage.status).toBe("unknown");
+    expect(request?.review.coverage.untestedPaths).toEqual(["src/math.js", "src/strings.js"]);
+    expect(request?.review.meta.stepErrors).toEqual([
+      { step: "checkCoverage", error: "LlmRefusalError: The model declined the request (other)." },
+    ]);
+  });
+
+  it("degrades when summarizeDiff refuses, and the review still exists", async () => {
+    const llm = reviewScript({
+      summarizeDiff: () => {
+        throw new LlmRefusalError("other");
+      },
+    });
+    const { graph, config } = setup(llm);
+
+    const { request } = await runToApproval(graph, config());
+
+    expect(request?.review).toBeDefined();
+    expect(request?.review.meta.stepErrors).toEqual([
+      { step: "summarizeDiff", error: "LlmRefusalError: The model declined the request (other)." },
+    ]);
+  });
+
+  it("retries a transient failure in a whole-change step instead of degrading it", async () => {
+    let failures = 1;
+    const llm = reviewScript({
+      flagRisks: () => {
+        if (failures-- > 0) throw new RepoToolTransportError("boom");
+        return {
+          risks: [
+            { kind: "public_api", level: "low", paths: ["src/math.js"], rationale: "New export." },
+          ],
+        };
+      },
+    });
+    const { graph, config } = setup(llm);
+
+    const { request: req } = await runToApproval(graph, config());
+
+    expect(req?.review.meta.stepErrors).toEqual([]);
+    expect(llm.callsFor("flagRisks")).toHaveLength(2);
+  });
+
   it("retries a transient MCP failure", async () => {
     let failures = 1;
     const flaky: RepoToolsApi = {

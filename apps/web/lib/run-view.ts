@@ -88,6 +88,8 @@ export function reduceRun(view: RunView, event: WebEvent): RunView {
             ...view,
             files: { ...view.files, [p.path]: { state: "failed", error: p.error } },
           };
+        case "step_failed":
+          return { ...view, log: [...view.log, `✗ ${p.node}: ${p.error}`] };
         case "llm": {
           if (p.progress.type !== "thinking") return view;
           const label = p.path === null ? p.task : `${p.task} · ${p.path}`;

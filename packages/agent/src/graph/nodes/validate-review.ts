@@ -35,6 +35,7 @@ export function validateReview({ llm }: ReviewDeps) {
         filesReviewed: state.fileResults.map((r) => r.path).sort(),
         filesSkipped: plan.skipped,
         fileErrors: state.fileErrors,
+        stepErrors: state.stepErrors,
         usage: state.usage,
       },
     };

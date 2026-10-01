@@ -52,6 +52,7 @@ const review: Review = {
     filesReviewed: ["src/math.js"],
     filesSkipped: [{ path: "pnpm-lock.yaml", reason: "lockfile" }],
     fileErrors: [],
+    stepErrors: [],
     usage: ZERO_USAGE,
   },
 };
@@ -82,6 +83,20 @@ describe("renderReviewBody", () => {
     expect(body).toContain("Untested: `src/divide.js`");
     expect(body).toContain("1 skipped · 0 failed");
     expect(body.endsWith(reviewMarker(review.meta.head))).toBe(true);
+  });
+});
+
+describe("renderReviewBody with step errors", () => {
+  it("reports a whole-change step that failed", () => {
+    const body = renderReviewBody({
+      ...review,
+      meta: {
+        ...review.meta,
+        stepErrors: [{ step: "flagRisks", error: "LlmRefusalError: refused" }],
+      },
+    });
+
+    expect(body).toContain("Not completed: risk analysis (LlmRefusalError: refused).");
   });
 });
 

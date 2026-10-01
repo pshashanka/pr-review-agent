@@ -42,6 +42,7 @@ const review = (findings: Finding[], verdict: Review["verdict"] = "comment"): Re
     filesReviewed: [],
     filesSkipped: [],
     fileErrors: [],
+    stepErrors: [],
     usage: ZERO_USAGE,
   },
 });

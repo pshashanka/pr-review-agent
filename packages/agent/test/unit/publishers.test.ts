@@ -42,6 +42,7 @@ const review: Review = {
     filesReviewed: ["src/math.js"],
     filesSkipped: [],
     fileErrors: [],
+    stepErrors: [],
     usage: ZERO_USAGE,
   },
 };

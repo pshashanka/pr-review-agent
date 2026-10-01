@@ -1,4 +1,4 @@
-import type { Finding, Review, Severity, Verdict } from "./schema.js";
+import type { Finding, Review, ReviewStep, Severity, Verdict } from "./schema.js";
 
 const VERDICT_LABEL: Record<Verdict, string> = {
   approve: "Approve",
@@ -7,6 +7,12 @@ const VERDICT_LABEL: Record<Verdict, string> = {
 };
 
 const SEVERITY_ORDER: Severity[] = ["blocker", "major", "minor", "nit"];
+
+const STEP_LABEL: Record<ReviewStep, string> = {
+  summarizeDiff: "diff summary",
+  checkCoverage: "coverage check",
+  flagRisks: "risk analysis",
+};
 
 /** Hidden marker that identifies a posted review, so a retry never posts twice. */
 export function reviewMarker(head: string): string {
@@ -53,6 +59,14 @@ export function renderReviewBody(review: Review): string {
       }
     }
     sections.push(lines.join("\n"));
+  }
+
+  if (review.meta.stepErrors.length > 0) {
+    sections.push(
+      review.meta.stepErrors
+        .map((e) => `_Not completed: ${STEP_LABEL[e.step]} (${e.error})._`)
+        .join("\n\n"),
+    );
   }
 
   const { meta } = review;

@@ -157,6 +157,7 @@ async function follow(
     else if (p.type === "file_started") log(`  … ${p.path}`);
     else if (p.type === "file_done") log(`  ✓ ${p.path} (${p.findings} findings)`);
     else if (p.type === "file_failed") log(`  ✗ ${p.path}: ${p.error}`);
+    else if (p.type === "step_failed") log(`  ✗ ${p.node}: ${p.error}`);
     else if (p.type === "tests_run") log(`  tests ${p.target}: ${p.passed ? "passed" : "failed"}`);
     else if (verbose && p.progress.type === "thinking")
       process.stderr.write(`\x1b[2m${p.progress.delta}\x1b[0m`);

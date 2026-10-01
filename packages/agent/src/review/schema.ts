@@ -109,6 +109,18 @@ export const CoverageSchema = z.object({
 export type Coverage = z.infer<typeof CoverageSchema>;
 
 /**
+ * The names of the whole-change graph steps that can fail without being
+ * fatal (see `ReviewStep` usages in the graph and `Review.meta.stepErrors`).
+ */
+export type ReviewStep = "summarizeDiff" | "checkCoverage" | "flagRisks";
+
+/**
+ * `Coverage`, plus a status only the agent (not the model) can produce: the
+ * coverage check itself failed, so there's no model judgement to report.
+ */
+export type ReviewCoverage = Omit<Coverage, "status"> & { status: Coverage["status"] | "unknown" };
+
+/**
  * Output of the synthesis step. It selects and orders existing findings by id
  * rather than writing new ones, so every inline comment traces back to a
  * per-file analysis of real diff lines.
@@ -149,7 +161,7 @@ export interface Review {
   verdict: Verdict;
   findings: Finding[];
   risks: Risk[];
-  coverage: Coverage;
+  coverage: ReviewCoverage;
   meta: {
     base: string;
     head: string;
@@ -158,6 +170,7 @@ export interface Review {
     filesReviewed: string[];
     filesSkipped: { path: string; reason: string }[];
     fileErrors: { path: string; error: string }[];
+    stepErrors: { step: ReviewStep; error: string }[];
     usage: Usage;
   };
 }

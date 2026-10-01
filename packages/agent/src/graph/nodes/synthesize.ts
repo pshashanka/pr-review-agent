@@ -21,6 +21,9 @@ export function synthesize({ llm }: ReviewDeps) {
       ...state.fileResults.map((r) => `- ${r.path}: ${r.summary}`),
       ...state.fileErrors.map((e) => `- ${e.path}: NOT REVIEWED (${e.error})`),
       "</file_summaries>",
+      "<steps_not_completed>",
+      ...state.stepErrors.map((e) => `- ${e.step}: NOT COMPLETED (${e.error})`),
+      "</steps_not_completed>",
       "<findings>",
       ...findings.map(
         (f) =>

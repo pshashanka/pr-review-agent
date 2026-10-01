@@ -90,7 +90,7 @@ Progress is streamed with LangGraph's custom stream writer.
 
 **Two kinds of failure, handled differently.**
 
-- _This file can't be reviewed_ (refusal, unusable output, tool error): it's recorded in `fileErrors`, shown in the review, and the rest carries on.
+- _This file (or whole-change step) can't be reviewed_ (refusal, unusable output, tool error): it's recorded (`fileErrors` for a file, `stepErrors` for the diff summary, coverage check or risk analysis) and shown in the review, and the rest carries on. Rule-based risks and name-based test pairing still apply even if the model's part of that step failed. Only synthesis, which turns everything else into the final review, is fatal.
 - _Something transient broke_ (MCP transport, API overload after the SDK's own retries): LangGraph retries the node with backoff. If it keeps failing, the run stops at its checkpoint. On resume, the parallel tasks that already finished are kept, and only the failed work runs again. There's a test for exactly this.
 
 **Threads are keyed by target and head commit** (`owner/repo#7@<sha>`). Rerunning a review of the same commit continues it instead of paying for it twice. A new push gets a fresh review. Publishing is idempotent too: a hidden marker in the posted body prevents duplicates.
@@ -116,7 +116,7 @@ Cache breakpoints sit after the system prompt and after the shared context block
 ## Testing
 
 ```sh
-pnpm test        # agent: 61 tests · web: 13 tests, no API key needed
+pnpm test        # agent: 84 tests · web: 23 tests, no API key needed
 pnpm eval        # live quality eval, uses Claude (costs money)
 ```
 

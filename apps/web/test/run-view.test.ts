@@ -23,6 +23,17 @@ describe("reduceRun", () => {
     expect(view.live).toBe(true);
   });
 
+  it("logs a whole-change step failure", () => {
+    const view = run([
+      {
+        type: "progress",
+        event: { type: "step_failed", node: "flagRisks", error: "refused" },
+      },
+    ]);
+
+    expect(view.log).toEqual(["✗ flagRisks: refused"]);
+  });
+
   it("accumulates thinking per step and file, and resets when the label changes", () => {
     const thinking = (path: string | null, delta: string): WebEvent => ({
       type: "progress",

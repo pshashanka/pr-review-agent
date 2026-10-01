@@ -46,6 +46,7 @@ export type ReviewEvent =
   | { type: "file_started"; path: string }
   | { type: "file_done"; path: string; findings: number }
   | { type: "file_failed"; path: string; error: string }
+  | { type: "step_failed"; node: string; error: string }
   | { type: "tests_run"; target: string; passed: boolean; durationMs: number }
   | { type: "llm"; task: LlmTask; path: string | null; progress: LlmProgress };
 
