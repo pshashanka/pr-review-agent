@@ -62,7 +62,18 @@ const FEATURE_FILES: Record<string, string | Uint8Array> = {
   "assets/logo.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]),
 };
 
-export async function createFixtureRepo(): Promise<FixtureRepo> {
+export function createFixtureRepo(): Promise<FixtureRepo> {
+  return createRepoFromFiles(BASE_FILES, FEATURE_FILES);
+}
+
+/**
+ * Builds a repo with `base` committed on main and `head` applied on a
+ * checked-out feature branch. Files in `head` overwrite (or add to) `base`.
+ */
+export async function createRepoFromFiles(
+  base: Record<string, string | Uint8Array>,
+  head: Record<string, string | Uint8Array>,
+): Promise<FixtureRepo> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "pr-review-fixture-")));
   const git = (...args: string[]) =>
     execFileSync("git", ["-c", "init.defaultBranch=main", ...args], {
@@ -89,15 +100,15 @@ export async function createFixtureRepo(): Promise<FixtureRepo> {
   };
 
   git("init", "--quiet");
-  await writeAll(BASE_FILES);
+  await writeAll(base);
   git("add", "--all");
   git("commit", "--quiet", "-m", "base");
   const baseSha = git("rev-parse", "HEAD");
 
   git("checkout", "--quiet", "-b", "feature");
-  await writeAll(FEATURE_FILES);
+  await writeAll(head);
   git("add", "--all");
-  git("commit", "--quiet", "-m", "add divide and strings");
+  git("commit", "--quiet", "-m", "feature");
   const headSha = git("rev-parse", "HEAD");
 
   return { root, baseSha, headSha, cleanup: () => rm(root, { recursive: true, force: true }) };
