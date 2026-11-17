@@ -49,13 +49,33 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
   });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
-/** Reads an SSE response to the end and returns its events. */
+/** Reads an SSE response to the end and returns its data payloads in order. */
 async function readEvents(response: Response): Promise<WebEvent[]> {
   const text = await response.text();
   return text
     .split("\n\n")
-    .filter((chunk) => chunk.startsWith("data: "))
-    .map((chunk) => JSON.parse(chunk.slice(6)) as WebEvent);
+    .filter((chunk) => chunk.split("\n").some((line) => line.startsWith("data: ")))
+    .map((chunk) => {
+      const dataLine = chunk.split("\n").find((line) => line.startsWith("data: "));
+      return JSON.parse((dataLine as string).slice(6)) as WebEvent;
+    });
+}
+
+/** Reads an SSE response and returns each frame's id (null for snapshots) and payload. */
+async function readFrames(response: Response): Promise<{ id: number | null; event: WebEvent }[]> {
+  const text = await response.text();
+  return text
+    .split("\n\n")
+    .filter((chunk) => chunk.split("\n").some((line) => line.startsWith("data: ")))
+    .map((chunk) => {
+      const lines = chunk.split("\n");
+      const idLine = lines.find((line) => line.startsWith("id: "));
+      const dataLine = lines.find((line) => line.startsWith("data: "));
+      return {
+        id: idLine === undefined ? null : Number(idLine.slice(4)),
+        event: JSON.parse((dataLine as string).slice(6)) as WebEvent,
+      };
+    });
 }
 
 describe("review API", () => {
@@ -69,9 +89,15 @@ describe("review API", () => {
 
     const response = await routes.events.GET(new Request("http://localhost"), ctx(threadId));
     expect(response.headers.get("content-type")).toBe("text/event-stream");
-    const events = await readEvents(response);
+    const frames = await readFrames(response);
+    const events = frames.map((f) => f.event);
 
     expect(events[0]).toMatchObject({ type: "snapshot", live: true });
+    // The snapshot has no id; every buffered event carries a monotonic id so a
+    // reconnecting EventSource can resume from Last-Event-ID without replays.
+    expect(frames[0]?.id).toBeNull();
+    const ids = frames.slice(1).map((f) => f.id);
+    expect(ids).toEqual(ids.map((_, i) => i + 1));
     expect(events.filter((e) => e.type === "node_finished").map((e) => e.node)).toEqual(
       expect.arrayContaining([
         "loadChange",
@@ -85,6 +111,12 @@ describe("review API", () => {
       type: "finished",
       status: { state: "awaiting_approval" },
     });
+  });
+
+  it("tells the browser to retry a dropped connection after about a second", async () => {
+    const response = await routes.events.GET(new Request("http://localhost"), ctx(threadId));
+
+    expect(await response.text()).toContain("retry: 1000");
   });
 
   it("returns the same thread, without a new run, when started again", async () => {

@@ -13,13 +13,16 @@ export type WebEvent =
 const MAX_BUFFERED_THINKING = 500;
 
 export interface Subscriber {
-  onEvent(event: WebEvent): void;
+  /** `id` is the event's sequence number, used for Last-Event-ID replay. */
+  onEvent(id: number, event: WebEvent): void;
   /** The run ended (finished, paused or failed); no more events will come. */
   onClose(): void;
 }
 
 interface LiveRun {
-  events: WebEvent[];
+  events: { id: number; event: WebEvent }[];
+  /** Sequence number of the next published event; starts at 1 so 0 means "none seen yet". */
+  nextId: number;
   thinkingBuffered: number;
   subscribers: Set<Subscriber>;
 }
@@ -40,23 +43,24 @@ export class RunRegistry {
   /** Starts a run in the background. Throws if one is already live for the thread. */
   start(threadId: string, graph: Graph, agentThreadId: string, step: Step): void {
     if (this.#runs.has(threadId)) throw new Error("A run is already in progress for this review.");
-    const run: LiveRun = { events: [], thinkingBuffered: 0, subscribers: new Set() };
+    const run: LiveRun = { events: [], nextId: 1, thinkingBuffered: 0, subscribers: new Set() };
     this.#runs.set(threadId, run);
 
     const publish = (event: WebEvent) => {
+      const id = run.nextId++;
       if (
         event.type === "progress" &&
         event.event.type === "llm" &&
         event.event.progress.type === "thinking"
       ) {
         if (run.thinkingBuffered >= MAX_BUFFERED_THINKING) {
-          for (const subscriber of run.subscribers) subscriber.onEvent(event);
+          for (const subscriber of run.subscribers) subscriber.onEvent(id, event);
           return; // send live, but stop buffering for replay
         }
         run.thinkingBuffered++;
       }
-      run.events.push(event);
-      for (const subscriber of run.subscribers) subscriber.onEvent(event);
+      run.events.push({ id, event });
+      for (const subscriber of run.subscribers) subscriber.onEvent(id, event);
     };
 
     void (async () => {
@@ -73,13 +77,16 @@ export class RunRegistry {
   }
 
   /**
-   * Replays a live run's events, then forwards new ones until it ends.
-   * Returns an unsubscribe function, or null if nothing is running.
+   * Replays a live run's buffered events after `lastEventId`, then forwards
+   * new ones until it ends. Returns an unsubscribe function, or null if
+   * nothing is running.
    */
-  subscribe(threadId: string, subscriber: Subscriber): (() => void) | null {
+  subscribe(threadId: string, subscriber: Subscriber, lastEventId = 0): (() => void) | null {
     const run = this.#runs.get(threadId);
     if (run === undefined) return null;
-    for (const event of run.events) subscriber.onEvent(event);
+    for (const { id, event } of run.events) {
+      if (id > lastEventId) subscriber.onEvent(id, event);
+    }
     run.subscribers.add(subscriber);
     return () => run.subscribers.delete(subscriber);
   }

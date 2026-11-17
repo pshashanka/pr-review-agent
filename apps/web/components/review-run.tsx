@@ -3,7 +3,7 @@
 import type { ReviewDecision } from "@pr-review/agent";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import type { WebEvent } from "@/lib/run-registry";
-import { INITIAL_VIEW, STEPS, reduceRun, type RunView } from "@/lib/run-view";
+import { INITIAL_VIEW, STEPS, reduceRun } from "@/lib/run-view";
 import { ApprovalPanel } from "./approval-panel";
 import { ReviewSummary } from "./review-summary";
 
@@ -20,40 +20,27 @@ export function ReviewRun({ threadId }: { threadId: string }) {
   const base = `/api/reviews/${encodeURIComponent(threadId)}`;
 
   useEffect(() => {
-    let source: EventSource | null = null;
-    let stopped = false;
-
-    const connect = () => {
-      if (stopped) return;
-      source = new EventSource(`${base}/events`);
-      source.onmessage = (message: MessageEvent<string>) => {
-        dispatch(JSON.parse(message.data) as WebEvent);
-      };
-      source.onerror = () => {
-        source?.close();
-        source = null;
-        // The server closes the stream when the run pauses or ends. A dropped
-        // connection mid-run (sleep, restart, network blip) must not leave the
-        // page thinking it is still live with no stream: reconnect while the
-        // run is live, otherwise read the final status from the checkpoint.
-        void fetch(base)
-          .then((r) => r.json() as Promise<{ status: RunView["status"]; live: boolean }>)
-          .then(({ status, live }) => {
-            if (stopped) return;
-            if (status !== null) dispatch({ type: "snapshot", status, live });
-            if (live) connect();
-          })
-          .catch(() => {
-            if (!stopped) setTimeout(connect, 1_000);
-          });
-      };
+    // The server prefixes each buffered event with an `id:` line, so the
+    // browser's built-in EventSource retry resumes from the last seen id after
+    // a dropped connection instead of replaying events the page already has.
+    const source = new EventSource(`${base}/events`);
+    source.onmessage = (message: MessageEvent<string>) => {
+      const event = JSON.parse(message.data) as WebEvent;
+      dispatch(event);
+      if (event.type === "snapshot") {
+        // A snapshot is a fresh read of the checkpoint: clear any stale action
+        // error and re-enable the controls. If the run is no longer live the
+        // server has closed the stream, so stop the automatic reconnection.
+        setSubmitting(false);
+        setActionError(null);
+        if (!event.live) source.close();
+      } else if (event.type === "finished" || event.type === "failed") {
+        // The run ended; the server will close the stream too.
+        setSubmitting(false);
+        source.close();
+      }
     };
-
-    connect();
-    return () => {
-      stopped = true;
-      source?.close();
-    };
+    return () => source.close();
   }, [base, connection]);
 
   const post = useCallback(
@@ -67,14 +54,16 @@ export function ReviewRun({ threadId }: { threadId: string }) {
           body: body === undefined ? null : JSON.stringify(body),
         });
         if (!response.ok) {
-          const { error } = (await response.json()) as { error?: string };
-          setActionError(error ?? `Request failed (${response.status})`);
+          setActionError(await describeHttpError(response));
+          setSubmitting(false);
           return;
         }
+        // Keep submitting until the reconnected stream's snapshot arrives: the
+        // decision is applied asynchronously, so the controls must not become
+        // clickable again (and double-click into a 409) in the meantime.
         setConnection((c) => c + 1);
       } catch {
         setActionError("Could not reach the server. Try again.");
-      } finally {
         setSubmitting(false);
       }
     },
@@ -186,4 +175,16 @@ export function ReviewRun({ threadId }: { threadId: string }) {
       )}
     </section>
   );
+}
+
+/** Turns a failed HTTP response into a message without crashing on a non-JSON body. */
+async function describeHttpError(response: Response): Promise<string> {
+  const text = await response.text().catch(() => "");
+  try {
+    const body = JSON.parse(text) as { error?: unknown };
+    if (typeof body.error === "string" && body.error !== "") return body.error;
+  } catch {
+    // Not JSON (a proxy's HTML 502, for example): fall back to the status.
+  }
+  return `Request failed (${response.status})`;
 }

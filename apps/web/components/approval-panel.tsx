@@ -68,11 +68,20 @@ export function ApprovalPanel({
 
       <label>
         Summary
-        <textarea value={summary} rows={4} onChange={(e) => setSummary(e.target.value)} />
+        <textarea
+          value={summary}
+          rows={4}
+          onChange={(e) => setSummary(e.target.value)}
+          disabled={disabled}
+        />
       </label>
       <label>
         Verdict
-        <select value={verdict} onChange={(e) => setVerdict(e.target.value as Verdict)}>
+        <select
+          value={verdict}
+          onChange={(e) => setVerdict(e.target.value as Verdict)}
+          disabled={disabled}
+        >
           <option value="approve">approve</option>
           <option value="comment">comment</option>
           <option value="request_changes">request changes</option>
@@ -105,6 +114,7 @@ export function ApprovalPanel({
               type="checkbox"
               checked={f.keep}
               onChange={(e) => update(i, { keep: e.target.checked })}
+              disabled={disabled}
             />
             <span className={`badge ${f.severity}`}>{f.severity}</span>
             <span className="mono">
@@ -115,13 +125,13 @@ export function ApprovalPanel({
           <input
             value={f.title}
             onChange={(e) => update(i, { title: e.target.value })}
-            disabled={!f.keep}
+            disabled={disabled || !f.keep}
           />
           <textarea
             value={f.body}
             rows={3}
             onChange={(e) => update(i, { body: e.target.value })}
-            disabled={!f.keep}
+            disabled={disabled || !f.keep}
           />
           {f.suggestion !== null && <pre className="suggestion">{f.suggestion}</pre>}
         </div>
