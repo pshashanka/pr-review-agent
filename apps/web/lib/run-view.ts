@@ -58,7 +58,14 @@ export function reduceRun(view: RunView, event: WebEvent): RunView {
     case "node_finished":
       return { ...view, finished: { ...view.finished, [event.node]: true } };
     case "awaiting_approval":
-      return { ...view, status: { state: "awaiting_approval", request: event.request } };
+      // The run has paused at the human gate; it's no longer streaming, so
+      // stop being live immediately rather than waiting for `finished` or a
+      // reconnect. This makes the approval panel appear without delay.
+      return {
+        ...view,
+        status: { state: "awaiting_approval", request: event.request },
+        live: false,
+      };
     case "finished":
       return { ...view, status: event.status, live: false };
     case "failed":

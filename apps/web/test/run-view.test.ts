@@ -70,4 +70,13 @@ describe("reduceRun", () => {
 
     expect(view).toMatchObject({ error: "boom", live: false });
   });
+
+  it("shows the approval panel without waiting for a reconnect", () => {
+    const view = run([
+      { type: "snapshot", status: { state: "running", next: [] }, live: true },
+      { type: "awaiting_approval", request: { review: {} as never, markdown: "" } },
+    ]);
+
+    expect(view).toMatchObject({ status: { state: "awaiting_approval" }, live: false });
+  });
 });
