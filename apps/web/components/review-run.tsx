@@ -11,41 +11,72 @@ export function ReviewRun({ threadId }: { threadId: string }) {
   const [view, dispatch] = useReducer(reduceRun, INITIAL_VIEW);
   // Bumped to reconnect after we trigger a new run (decision, resume).
   const [connection, setConnection] = useState(0);
+  // True while a decision/resume request is in flight, so controls can't be
+  // double-clicked into a 409.
+  const [submitting, setSubmitting] = useState(false);
+  // Error from the last decision/resume request, shown by the control that
+  // sent it. This is not a run failure, so it's kept apart from view.error.
+  const [actionError, setActionError] = useState<string | null>(null);
   const base = `/api/reviews/${encodeURIComponent(threadId)}`;
 
   useEffect(() => {
-    const source = new EventSource(`${base}/events`);
-    source.onmessage = (message: MessageEvent<string>) => {
-      dispatch(JSON.parse(message.data) as WebEvent);
+    let source: EventSource | null = null;
+    let stopped = false;
+
+    const connect = () => {
+      if (stopped) return;
+      source = new EventSource(`${base}/events`);
+      source.onmessage = (message: MessageEvent<string>) => {
+        dispatch(JSON.parse(message.data) as WebEvent);
+      };
+      source.onerror = () => {
+        source?.close();
+        source = null;
+        // The server closes the stream when the run pauses or ends. A dropped
+        // connection mid-run (sleep, restart, network blip) must not leave the
+        // page thinking it is still live with no stream: reconnect while the
+        // run is live, otherwise read the final status from the checkpoint.
+        void fetch(base)
+          .then((r) => r.json() as Promise<{ status: RunView["status"]; live: boolean }>)
+          .then(({ status, live }) => {
+            if (stopped) return;
+            if (status !== null) dispatch({ type: "snapshot", status, live });
+            if (live) connect();
+          })
+          .catch(() => {
+            if (!stopped) setTimeout(connect, 1_000);
+          });
+      };
     };
-    // The server closes the stream when the run pauses or ends. Don't let
-    // EventSource reconnect; read the final status from the checkpoint instead.
-    source.onerror = () => {
-      source.close();
-      void fetch(base)
-        .then((r) => r.json() as Promise<{ status: RunView["status"]; live: boolean }>)
-        .then(({ status, live }) => {
-          if (status !== null) dispatch({ type: "snapshot", status, live });
-        });
-    };
+
+    connect();
     return () => {
-      source.close();
+      stopped = true;
+      source?.close();
     };
   }, [base, connection]);
 
   const post = useCallback(
     async (path: string, body?: unknown) => {
-      const response = await fetch(`${base}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body === undefined ? null : JSON.stringify(body),
-      });
-      if (!response.ok) {
-        const { error } = (await response.json()) as { error?: string };
-        dispatch({ type: "failed", error: error ?? `Request failed (${response.status})` });
-        return;
+      setSubmitting(true);
+      setActionError(null);
+      try {
+        const response = await fetch(`${base}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body === undefined ? null : JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const { error } = (await response.json()) as { error?: string };
+          setActionError(error ?? `Request failed (${response.status})`);
+          return;
+        }
+        setConnection((c) => c + 1);
+      } catch {
+        setActionError("Could not reach the server. Try again.");
+      } finally {
+        setSubmitting(false);
       }
-      setConnection((c) => c + 1);
     },
     [base],
   );
@@ -100,19 +131,31 @@ export function ReviewRun({ threadId }: { threadId: string }) {
 
       {view.error !== null && <p className="error card">Run failed: {view.error}</p>}
 
+      {actionError !== null && (
+        <p className="error card">
+          Could not apply that action: {actionError}{" "}
+          <button className="secondary" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </p>
+      )}
+
       {status?.state === "running" && !view.live && (
         <div className="card">
           <p>
             This run stopped before finishing (for example, the server restarted). It can continue
             from its last checkpoint.
           </p>
-          <button onClick={() => void post("/resume")}>Resume</button>
+          <button onClick={() => void post("/resume")} disabled={submitting}>
+            {submitting ? "Resuming…" : "Resume"}
+          </button>
         </div>
       )}
 
       {status?.state === "awaiting_approval" && !view.live && (
         <ApprovalPanel
           request={status.request}
+          disabled={submitting}
           onDecide={(decision: ReviewDecision) => void post("/decision", decision)}
         />
       )}
@@ -120,7 +163,11 @@ export function ReviewRun({ threadId }: { threadId: string }) {
       {status?.state === "published" && (
         <div className="card">
           <p className="ok">
-            {status.published.alreadyPosted ? "Already published" : "Published"}:{" "}
+            {status.published.alreadyPosted
+              ? "This review was already posted, so nothing new was posted:"
+              : status.published.kind === "github"
+                ? "Review posted to GitHub as a comment:"
+                : "Review written to a file:"}{" "}
             {status.published.kind === "github" ? (
               <a href={status.published.location}>{status.published.location}</a>
             ) : (
@@ -133,7 +180,8 @@ export function ReviewRun({ threadId }: { threadId: string }) {
 
       {status?.state === "rejected" && (
         <div className="card">
-          <p>Rejected: {status.reason}</p>
+          <p>Rejected. Nothing was posted.</p>
+          <p className="muted">Reason: {status.reason}</p>
         </div>
       )}
     </section>

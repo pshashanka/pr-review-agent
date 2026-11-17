@@ -12,9 +12,11 @@ type Verdict = ApprovalRequest["review"]["verdict"];
  */
 export function ApprovalPanel({
   request,
+  disabled = false,
   onDecide,
 }: {
   request: ApprovalRequest;
+  disabled?: boolean;
   onDecide: (decision: ReviewDecision) => void;
 }) {
   const { review } = request;
@@ -131,21 +133,25 @@ export function ApprovalPanel({
             placeholder="Why reject?"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
+            disabled={disabled}
           />
           <button
             className="danger"
+            disabled={disabled}
             onClick={() => onDecide({ action: "reject", reason: reason.trim() || "Rejected" })}
           >
-            Confirm reject
+            {disabled ? "Rejecting…" : "Confirm reject"}
           </button>
-          <button className="secondary" onClick={() => setRejecting(false)}>
+          <button className="secondary" onClick={() => setRejecting(false)} disabled={disabled}>
             Cancel
           </button>
         </div>
       ) : (
         <div className="actions">
-          <button onClick={approve}>{edited ? "Approve with edits" : "Approve and publish"}</button>
-          <button className="secondary" onClick={() => setRejecting(true)}>
+          <button onClick={approve} disabled={disabled}>
+            {disabled ? "Publishing…" : edited ? "Approve with edits" : "Approve and publish"}
+          </button>
+          <button className="secondary" onClick={() => setRejecting(true)} disabled={disabled}>
             Reject
           </button>
         </div>
