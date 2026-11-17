@@ -28,12 +28,18 @@ export async function GET(
   }
 
   const registry = getRegistry();
+  const lastEventId = parseLastEventId(request.headers.get("last-event-id"));
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
-      const send = (event: WebEvent) => {
-        if (!closed) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      // The snapshot is (re)sent on every connection without an id, so it is
+      // never deduplicated by Last-Event-ID; buffered events carry ids.
+      const send = (event: WebEvent, id: number | null) => {
+        if (closed) return;
+        const lines = id === null ? [] : [`id: ${id}`];
+        lines.push(`data: ${JSON.stringify(event)}`);
+        controller.enqueue(encoder.encode(`${lines.join("\n")}\n\n`));
       };
       const close = () => {
         if (closed) return;
@@ -46,8 +52,16 @@ export async function GET(
         if (!closed) controller.enqueue(encoder.encode(": keep-alive\n\n"));
       }, HEARTBEAT_MS);
 
-      send({ type: "snapshot", status, live: registry.isLive(id) });
-      const unsubscribe = registry.subscribe(id, { onEvent: send, onClose: close });
+      // Tell EventSource to retry a dropped connection after ~1s instead of the
+      // browser default, so mid-run drops recover while the run is still live.
+      controller.enqueue(encoder.encode("retry: 1000\n\n"));
+
+      send({ type: "snapshot", status, live: registry.isLive(id) }, null);
+      const unsubscribe = registry.subscribe(
+        id,
+        { onEvent: (eventId, event) => send(event, eventId), onClose: close },
+        lastEventId,
+      );
       if (unsubscribe === null) close();
       request.signal.addEventListener("abort", close);
     },
@@ -60,4 +74,11 @@ export async function GET(
       Connection: "keep-alive",
     },
   });
+}
+
+/** Parses a Last-Event-ID header; absent or malformed means "from the start". */
+function parseLastEventId(value: string | null): number {
+  if (value === null) return 0;
+  const id = Number(value);
+  return Number.isFinite(id) && id >= 0 ? Math.floor(id) : 0;
 }

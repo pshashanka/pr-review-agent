@@ -12,9 +12,11 @@ type Verdict = ApprovalRequest["review"]["verdict"];
  */
 export function ApprovalPanel({
   request,
+  disabled = false,
   onDecide,
 }: {
   request: ApprovalRequest;
+  disabled?: boolean;
   onDecide: (decision: ReviewDecision) => void;
 }) {
   const { review } = request;
@@ -66,11 +68,20 @@ export function ApprovalPanel({
 
       <label>
         Summary
-        <textarea value={summary} rows={4} onChange={(e) => setSummary(e.target.value)} />
+        <textarea
+          value={summary}
+          rows={4}
+          onChange={(e) => setSummary(e.target.value)}
+          disabled={disabled}
+        />
       </label>
       <label>
         Verdict
-        <select value={verdict} onChange={(e) => setVerdict(e.target.value as Verdict)}>
+        <select
+          value={verdict}
+          onChange={(e) => setVerdict(e.target.value as Verdict)}
+          disabled={disabled}
+        >
           <option value="approve">approve</option>
           <option value="comment">comment</option>
           <option value="request_changes">request changes</option>
@@ -103,6 +114,7 @@ export function ApprovalPanel({
               type="checkbox"
               checked={f.keep}
               onChange={(e) => update(i, { keep: e.target.checked })}
+              disabled={disabled}
             />
             <span className={`badge ${f.severity}`}>{f.severity}</span>
             <span className="mono">
@@ -113,13 +125,13 @@ export function ApprovalPanel({
           <input
             value={f.title}
             onChange={(e) => update(i, { title: e.target.value })}
-            disabled={!f.keep}
+            disabled={disabled || !f.keep}
           />
           <textarea
             value={f.body}
             rows={3}
             onChange={(e) => update(i, { body: e.target.value })}
-            disabled={!f.keep}
+            disabled={disabled || !f.keep}
           />
           {f.suggestion !== null && <pre className="suggestion">{f.suggestion}</pre>}
         </div>
@@ -131,21 +143,25 @@ export function ApprovalPanel({
             placeholder="Why reject?"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
+            disabled={disabled}
           />
           <button
             className="danger"
+            disabled={disabled}
             onClick={() => onDecide({ action: "reject", reason: reason.trim() || "Rejected" })}
           >
-            Confirm reject
+            {disabled ? "Rejecting…" : "Confirm reject"}
           </button>
-          <button className="secondary" onClick={() => setRejecting(false)}>
+          <button className="secondary" onClick={() => setRejecting(false)} disabled={disabled}>
             Cancel
           </button>
         </div>
       ) : (
         <div className="actions">
-          <button onClick={approve}>{edited ? "Approve with edits" : "Approve and publish"}</button>
-          <button className="secondary" onClick={() => setRejecting(true)}>
+          <button onClick={approve} disabled={disabled}>
+            {disabled ? "Publishing…" : edited ? "Approve with edits" : "Approve and publish"}
+          </button>
+          <button className="secondary" onClick={() => setRejecting(true)} disabled={disabled}>
             Reject
           </button>
         </div>
